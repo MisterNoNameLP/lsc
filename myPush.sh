@@ -6,4 +6,4 @@ git add .
 git commit -m "$@"
 git push
 
-cp gamelinker /home/noname/executables
+cp lsc /home/noname/executables
