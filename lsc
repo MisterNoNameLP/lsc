@@ -11,7 +11,7 @@
 
 	You should have received a copy of the GNU General Public License along with this program. If not, see https://www.gnu.org/licenses/.
 ]]
-local version = "0.6"
+local version = "0.6.1"
 
 --===== conf =====--
 local dirList = {
@@ -143,19 +143,14 @@ end
 
 --===== scipt start =====--
 print("Lauch lsc v$version")
-print("Collect file list")
 for _, dir in pairs(dirList) do
+	print("Collect files in: $dir")
 	addToFileList(dir, ".exe")
 	addToFileList(dir, ".sh")
 end
 
---print(ut.tostring(fileList))
-
-exec("mkdir -p $outputDir")
-
 print("Create launch scripts")
-print(fileList)
-print(ut.tostring(fileList))
+exec("mkdir -p $outputDir")
 for name, info in pairs(fileList) do 
 	if info.fullPath then
 		print("Add launch script: ", name)
