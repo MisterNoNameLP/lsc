@@ -1,0 +1,194 @@
+#!/usr/bin/pleal
+--[[lsc (LaunchScriptCollector) Puts launch scripts for all .exe and .sh files from multiple sources into one place.
+
+	lsc is licensed under the GPLv3 license.
+
+	Copyright (C) 2023 MisterNoNameLP
+
+	This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+
+	This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License along with this program. If not, see https://www.gnu.org/licenses/.
+]]
+local version = "0.4d"
+
+--===== conf =====--
+local dirList = {
+	--"test",
+}
+local outputDir = "~/games"
+
+--===== local vars =====--
+local len = require("utf8").len
+local posix = require("posix")
+local ut = require("UT")
+local argparse = require("argparse")
+
+local args
+local fileList = {}
+
+do  --arg parsing
+	local parser = argparse("lsc", "LaunchScriptCollector")
+
+	parser:argument("dirs", "Dirs to link", nil, nil, "*"):target("dirList")
+	parser:option("-o --output", "Set output dir"):action(function(_, _, dir)
+		outputDir = dir
+	end)
+
+	parser:flag("-v --version", "Print version and exit"):action(function()
+		print("lsc v$version")
+		os.exit(0)
+	end)
+
+	args = parser:parse()
+
+	if #args.dirList > 0 then
+		dirList = args.dirList
+	end
+end
+
+--===== functions =====--
+--[[This function is ripped from DAMS v0.19.1_v1-prev41
+	https://github.com/MisterNoNameLP/dams
+]]
+local function exec(cmd, pollTimeout)
+	local execString = ""
+	local handlerFile, handlerFileDescriptor, events
+	local discriptorList = {}
+	local returnSignal
+	local tmpOutput, output = "", ""
+	 
+	execString = execString .. " " .. cmd .. " 2>&1; printf \"\n\$?\""
+
+	handlerFile = io.popen(execString, "r")
+
+	--make poopen file stream non blocking
+	handlerFileDescriptor = posix.fileno(handlerFile)
+	discriptorList[handlerFileDescriptor] = {events = {IN = true}}
+	pollTimeout = math.floor((pollTimeout or 0.01) * 1000)
+
+	while true do
+		events = posix.poll(discriptorList)
+		--reading handler file
+		tmpOutput = handlerFile:read("*a")
+		if tmpOutput then
+			output = output .. tmpOutput
+		end
+
+		if events > 0 and discriptorList[handlerFileDescriptor].revents.HUP then
+			break
+		end
+	end
+
+	--reading rest of handler file
+	tmpOutput = handlerFile:read("*a")
+	if tmpOutput then
+		output = output .. tmpOutput
+	end
+	handlerFile:close()
+
+	--getting exec exit code
+	for s in string.gmatch(output, "[^\n]+") do
+		returnSignal = s
+	end
+
+	output = output:sub(0, -(len(returnSignal) + 2))
+
+	print(output)
+
+	return tonumber(returnSignal), output
+end
+local function addToFileList(path, toFind)
+	local suc, findings = exec("find $path -iname '*$toFind'")
+	if suc ~= 0 then
+		return false
+	end
+
+	for fullPath in findings:gmatch("[^\n]*") do
+		local dir, file, ending = ut.seperatePath(fullPath)
+		file = file:lower() .. tostring(ending)
+		
+		if file == "" or file == "nil" then --do nothing
+		elseif fileList[file] == nil then
+			fileList[file] = {
+				fullPath = fullPath,
+				ending = ending
+			}
+		else
+			local occupiedFullPath = fileList[file].fullPath
+			local fullPathName = fullPath:gsub("[/]", "_")
+
+			if occupiedFullPath ~= false then
+				local occupiedPathName = occupiedFullPath:gsub("[/]", "_")
+				local occupiedEnding = select(3, ut.seperatePath(occupiedFullPath))
+				fileList[file] = {fullPath = false}
+				fileList["${file}_${occupiedPathName}"] = {
+					fullPath = occupiedFullPath,
+					ending = occupiedEnding
+				}
+			end
+			fileList["${file}_${fullPathName}"] = {
+				fullPath = fullPath,
+				ending = ending
+			}
+		end
+	end
+end
+
+--===== scipt start =====--
+print("Lauch lsc v$version")
+for _, dir in pairs(dirList) do
+	addToFileList(dir, ".exe")
+	addToFileList(dir, ".sh")
+end
+
+--print(ut.tostring(fileList))
+
+exec("mkdir -p $outputDir")
+
+for name, info in pairs(fileList) do 
+	if info.fullPath then
+		print("Add launch script: ", name)
+	end
+
+	if info.fullPath then 
+		shellName = name:gsub("'", [['"'"']])
+		shellFullPath = info.fullPath:gsub("'", [['"'"']])
+	end
+
+	if info.fullPath ~= false then
+		local path, file, ending = ut.seperatePath(info.fullPath)
+		local shellName = name:gsub("'", [['"'"']])
+		local shellPath = path:gsub("'", [['"'"']])
+		local shellFile = file:gsub("'", [['"'"']])
+		local shellEnding = ending:gsub("'", [['"'"']])
+
+		if info.ending == ".sh" then
+			--print(exec("ln -s '$info.fullPath' '$outputDir'"))
+			local launchScript = [[
+#!/bin/bash 
+cd '$shellPath' 
+'./${shellFile}${shellEnding}'
+			]]
+			local outputFile = io.open("$outputDir/$name", "w")
+			outputFile:write(launchScript)
+			outputFile:close()
+			print(exec("chmod +x '$outputDir/$shellName'"))
+
+		elseif info.ending == ".exe" then
+			local launchScript = [[
+#!/bin/bash 
+cd '$shellPath' 
+proton7-ssd '${shellFile}${shellEnding}'
+			]]
+			local outputFile = io.open("$outputDir/$name", "w")
+			outputFile:write(launchScript)
+			outputFile:close()
+			print(exec("chmod +x '$outputDir/$shellName'"))
+		end
+	end
+end
+
+
+

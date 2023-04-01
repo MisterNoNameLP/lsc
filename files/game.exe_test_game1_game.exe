@@ -1,0 +1,4 @@
+#!/bin/bash 
+cd 'test/game1/' 
+proton7-ssd 'game.exe'
+			
