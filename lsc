@@ -11,13 +11,13 @@
 
 	You should have received a copy of the GNU General Public License along with this program. If not, see https://www.gnu.org/licenses/.
 ]]
-local version = "0.5"
+local version = "0.6"
 
 --===== conf =====--
 local dirList = {
 	--"test",
 }
-local outputDir = "~/games"
+local outputDir = "/home/noname/games"
 
 --===== local vars =====--
 local len = require("utf8").len
@@ -95,7 +95,12 @@ local function exec(cmd, pollTimeout)
 
 	output = output:sub(0, -(len(returnSignal) + 2))
 
-	print(output)
+	if returnSignal ~= "0" then
+		print("Exec failed")
+		print(output)
+		print("Aborting")
+		os.exit(1)
+	end
 
 	return tonumber(returnSignal), output
 end
@@ -138,6 +143,7 @@ end
 
 --===== scipt start =====--
 print("Lauch lsc v$version")
+print("Collect file list")
 for _, dir in pairs(dirList) do
 	addToFileList(dir, ".exe")
 	addToFileList(dir, ".sh")
@@ -147,6 +153,9 @@ end
 
 exec("mkdir -p $outputDir")
 
+print("Create launch scripts")
+print(fileList)
+print(ut.tostring(fileList))
 for name, info in pairs(fileList) do 
 	if info.fullPath then
 		print("Add launch script: ", name)
@@ -190,5 +199,5 @@ proton7-ssd '${shellFile}${shellEnding}'
 	end
 end
 
-
+print("Done")
 
